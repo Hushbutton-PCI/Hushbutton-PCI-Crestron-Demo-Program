@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='ISO-8859-1' ?>
+<File Type='Manifest' Version='4.1.0' ObjectDisplayList='0'>
+<Project FileName='Hushbutton_Crestron_Demo_Program_iPad.zip' Size='86120' Build='20120914115502'>
+<Sources>
+<Source FileName='Hushbutton_Crestron_Demo_Program_iPad.xml' Size='556' Type='Application' Build='20120914115502' />
+<Source FileName='Hushbutton_Crestron_Demo_Program_iPad_Resource.xml' Size='2048' Type='Resource' Build='20120914115502' />
+<Source FileName='PCI #3.xml' Size='57104' Type='Page' Build='20120914115570' />
+<Source FileName='PCI #2.xml' Size='57104' Type='Page' Build='20120914115566' />
+<Source FileName='PCI #1.xml' Size='56916' Type='Page' Build='20120914115562' />
+</Sources>
+</Project>
+</File>
