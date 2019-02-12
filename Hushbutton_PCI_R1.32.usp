@@ -1,0 +1,523 @@
+/*******************************************************************************************
+  SIMPL+ Module Information
+  (Fill in comments below)
+*******************************************************************************************/
+/*
+Vendor Name:	Catch Technologies, LLC	
+System Name:    Hushbutton PCI
+System Number:
+Programmer:		Patrick Murray, Controlhaus Systems Design
+Comments:
+*/
+
+/*******************************************************************************************
+  Compiler Directives
+  (Uncomment and declare compiler directives as needed)
+*******************************************************************************************/
+// #ENABLE_DYNAMIC
+// #SYMBOL_NAME ""
+// #HINT ""
+// #DEFINE_CONSTANT 
+// #CATEGORY "" 
+#CATEGORY "20,29" // Conferencing, Relay Control
+// #DEFAULT_VOLATILE
+// #TRACE_TO_TRACE
+// #DIGITAL_EXPAND 
+// #ANALOG_SERIAL_EXPAND 
+// #OUTPUT_SHIFT 
+// #HELP_PDF_FILE ""
+#DEFAULT_VOLATILE
+#ENABLE_STACK_CHECKING
+#ENABLE_TRACE
+
+#HELP_BEGIN
+This module is to be used with Hushbutton_PCI.umc  
+-Red_LED_On turns Red LED On, Green LED Off and Opens PCM Relay 
+-Green_LED_On turns Red LED Off, Green LED On and Closes PCM Relay 
+-LED_Toggle toggles Red LED, Green LED and PCM Relay 
+-LED_Off turns Red LED Off, Green LED Off and Opens PCM Relay 
+#HELP_END
+
+/*******************************************************************************************
+  Include Libraries
+*******************************************************************************************/
+// #CRESTRON_LIBRARY ""
+
+/*******************************************************************************************
+  DIGITAL, ANALOG and SERIAL INPUTS and OUTPUTS
+*******************************************************************************************/
+DIGITAL_INPUT 
+_SKIP_,
+_SKIP_,
+_SKIP_,
+Debug,
+Connect,
+Red_LED_On[9],
+Green_LED_On[9],
+LED_Toggle[8],
+LED_Off[9],
+Poll[9],
+Managed_Mode_On[9],
+Managed_Mode_Off[9];
+
+//ANALOG_INPUT 
+STRING_INPUT 
+Device_IP_Address[16],
+TCPSocket_Tx$[64];
+
+//BUFFER_INPUT 
+
+DIGITAL_OUTPUT 
+_SKIP_,
+_SKIP_,
+_SKIP_,
+Connect_Status,
+_SKIP_,
+Red_LED_Is_On[8],
+_SKIP_,
+Green_LED_Is_On[8],
+_SKIP_,
+PCM_Relay_Is_Closed[8],
+Press[8],
+_SKIP_,
+Managed_Mode_Is_On[8];
+
+ANALOG_OUTPUT
+TCP_Connect_Status;
+
+STRING_OUTPUT 
+TCPSocket_Rx$;
+/*******************************************************************************************
+  SOCKETS
+*******************************************************************************************/
+TCP_CLIENT TCP_CLIENT_TCPSocket[64];
+// TCP_SERVER
+// UDP_SOCKET
+
+/*******************************************************************************************
+  Parameters
+*******************************************************************************************/
+// INTEGER_PARAMETER
+// SIGNED_INTEGER_PARAMETER
+// LONG_INTEGER_PARAMETER
+// SIGNED_LONG_INTEGER_PARAMETER
+STRING_PARAMETER
+Device_Port[4];
+
+/*******************************************************************************************
+  Parameter Properties
+  (Uncomment and declare parameter properties as needed)
+*******************************************************************************************/
+/*
+#BEGIN_PARAMETER_PROPERTIES parameter_variable, parameter_variable, ...
+   // propValidUnits = // unitString or unitDecimal|unitHex|unitPercent|unitCharacter|unitTime|unitTicks;
+   // propDefaultUnit = // unitString, unitDecimal, unitHex, unitPercent, unitCharacter, unitTime or unitTicks;
+   // propBounds = lower_bound , upper_bound;
+   // propDefaultValue = ;  // or, propDefaultValue = "";
+   // propList = // { "value" , "label" } , { "value" , "label" } , ... ;
+   // propShortDescription = "status_bar_hint_text";
+   // #BEGIN_PROP_FULL_DESCRIPTION  line_1...  line_2...  line_n  #END_PROP_FULL_DESCRIPTION
+   // #BEGIN_PROP_NOTES line_1...  line_2...  line_n  #END_PROP_NOTES
+#END_PARAMETER_PROPERTIES
+*/
+
+/*******************************************************************************************
+  Structure Definitions
+*******************************************************************************************/
+
+/*******************************************************************************************
+  Global Variables
+*******************************************************************************************/
+INTEGER nBusy;
+INTEGER nWaitingForAck;
+SIGNED_INTEGER iStatus;
+
+// LONG_INTEGER
+// SIGNED_LONG_INTEGER
+
+STRING sMsg[64];
+STRING sMsgToParse[12];
+STRING sString[1024];
+STRING sStringToSend[24];
+
+/*******************************************************************************************
+  Functions
+*******************************************************************************************/
+
+FUNCTION SendCommand()
+{     	
+	IF(Connect_Status && LEN(sString) && nWaitingForAck = 0)
+	{                              
+		nWaitingForAck = 1;			
+
+		sStringToSend = REMOVE("}",sString,1);
+		IF(LEN(sStringToSend))
+			iStatus = SocketSend(TCP_CLIENT_TCPSocket, sStringToSend); 
+		TRACE("Hushbutton_PCI: Sent: %s To:   %s",sStringToSend, Device_IP_Address);
+	    IF(iStatus >= 0)
+		{	
+			IF(Debug)
+				TRACE("Hushbutton_PCI: Sent: %s To:   %s",sStringToSend, Device_IP_Address);
+		}
+			
+		ELSE
+			nWaitingForAck = 0;
+
+		IF (iStatus < 0 && Debug)
+			TRACE("Hushbutton_PCI: Error Sending: %s To: %s",sStringToSend, Device_IP_Address);
+	}
+}
+
+STRING_FUNCTION HexToBinary(INTEGER nInteger)
+{
+	SWITCH(nInteger)
+	{
+    	CASE (0):		RETURN("0000");
+    	CASE (1):		RETURN("0001");
+    	CASE (2):		RETURN("0010");
+    	CASE (3):		RETURN("0011");
+    	CASE (4):		RETURN("0100");
+    	CASE (5):		RETURN("0101");
+    	CASE (6):		RETURN("0110");
+    	CASE (7):		RETURN("0111");
+    	CASE (8):		RETURN("1000");
+    	CASE (9):		RETURN("1001");
+    	CASE (10):		RETURN("1010");
+    	CASE (11):		RETURN("1011");
+    	CASE (12):		RETURN("1100");
+    	CASE (13):		RETURN("1101");
+    	CASE (14):		RETURN("1110");
+    	CASE (15):		RETURN("1111");
+	}
+}
+
+FUNCTION ParseMessage()
+{
+	INTEGER nIndex;
+	STRING sTemp[8];
+
+	IF(FIND("{=a",sMsgToParse))											//Parse message containing info for all mics
+	{
+		sTemp = HexToBinary(HEXTOI(MID(sMsgToParse,4,1))) + HexToBinary(HEXTOI(MID(sMsgToParse,5,1)));		// Parse Red state for all    
+		FOR(nIndex = 1 TO 8)
+		{
+			SWITCH(nIndex)
+			{
+		        CASE (1):	Red_LED_Is_On[8] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (2):	Red_LED_Is_On[7] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (3):	Red_LED_Is_On[6] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (4):	Red_LED_Is_On[5] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (5):	Red_LED_Is_On[4] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (6):	Red_LED_Is_On[3] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (7):	Red_LED_Is_On[2] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (8):	Red_LED_Is_On[1] = ATOI(MID(sTemp,nIndex,1));
+			}
+		}
+
+		sTemp = HexToBinary(HEXTOI(MID(sMsgToParse,6,1))) + HexToBinary(HEXTOI(MID(sMsgToParse,7,1)));		// Parse Green state for all    
+		FOR(nIndex = 1 TO 8)
+		{
+			SWITCH(nIndex)
+			{
+		        CASE (1):	Green_LED_Is_On[8] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (2):	Green_LED_Is_On[7] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (3):	Green_LED_Is_On[6] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (4):	Green_LED_Is_On[5] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (5):	Green_LED_Is_On[4] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (6):	Green_LED_Is_On[3] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (7):	Green_LED_Is_On[2] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (8):	Green_LED_Is_On[1] = ATOI(MID(sTemp,nIndex,1));
+			}
+		}
+
+		sTemp = HexToBinary(HEXTOI(MID(sMsgToParse,8,1))) + HexToBinary(HEXTOI(MID(sMsgToParse,9,1)));		// Parse Relay state for all    
+		FOR(nIndex = 1 TO 8)
+		{
+			SWITCH(nIndex)
+			{
+		        CASE (1):	PCM_Relay_Is_Closed[8] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (2):	PCM_Relay_Is_Closed[7] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (3):	PCM_Relay_Is_Closed[6] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (4):	PCM_Relay_Is_Closed[5] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (5):	PCM_Relay_Is_Closed[4] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (6):	PCM_Relay_Is_Closed[3] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (7):	PCM_Relay_Is_Closed[2] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (8):	PCM_Relay_Is_Closed[1] = ATOI(MID(sTemp,nIndex,1));
+			}
+		}
+
+		sTemp = HexToBinary(HEXTOI(MID(sMsgToParse,10,1))) + HexToBinary(HEXTOI(MID(sMsgToParse,11,1)));		// Parse Managed Mode state for all    
+		FOR(nIndex = 1 TO 8)
+		{
+			SWITCH(nIndex)
+			{
+		        CASE (1):	Managed_Mode_Is_On[8] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (2):	Managed_Mode_Is_On[7] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (3):	Managed_Mode_Is_On[6] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (4):	Managed_Mode_Is_On[5] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (5):	Managed_Mode_Is_On[4] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (6):	Managed_Mode_Is_On[3] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (7):	Managed_Mode_Is_On[2] = ATOI(MID(sTemp,nIndex,1));
+		        CASE (8):	Managed_Mode_Is_On[1] = ATOI(MID(sTemp,nIndex,1));
+			}
+		}
+	}
+
+	ELSE IF(FIND("{=s",sMsgToParse))										//Parse Hushbutton presses
+	{
+		sTemp = HexToBinary(HEXTOI(MID(sMsgToParse,4,1))) + HexToBinary(HEXTOI(MID(sMsgToParse,5,1)));		// Indicate press state for all    
+		FOR(nIndex = 1 TO 8)
+		{
+			SWITCH(nIndex)
+			{
+		        CASE (1):	Press[8] = ATOI(MID(sTemp,nIndex,1)) = 0;
+		        CASE (2):	Press[7] = ATOI(MID(sTemp,nIndex,1)) = 0;
+		        CASE (3):	Press[6] = ATOI(MID(sTemp,nIndex,1)) = 0;
+		        CASE (4):	Press[5] = ATOI(MID(sTemp,nIndex,1)) = 0;
+		        CASE (5):	Press[4] = ATOI(MID(sTemp,nIndex,1)) = 0;
+		        CASE (6):	Press[3] = ATOI(MID(sTemp,nIndex,1)) = 0;
+		        CASE (7):	Press[2] = ATOI(MID(sTemp,nIndex,1)) = 0;
+		        CASE (8):	Press[1] = ATOI(MID(sTemp,nIndex,1)) = 0;
+			}
+		}
+	}
+
+	ELSE															//Parse message containing info for single mics
+	{
+		IF((FIND("?",sStringToSend)) || (sStringToSend = sMsgToParse))	//Parse feedback if poll command was sent or if command was executed properly.
+		{
+	    	nIndex = ATOI(MID(sMsgToParse,3,1));								//Determine which mic the message is for
+			
+			Red_LED_Is_On[nIndex] 		 = ATOI(MID(sMsgToParse,4,1));			//Report mute status
+			Green_LED_Is_On[nIndex] 	 = ATOI(MID(sMsgToParse,5,1));			//Report mute status
+			PCM_Relay_Is_Closed[nIndex]  = ATOI(MID(sMsgToParse,6,1));			//Report Relay status
+			//Managed_Mode_Is_On[nIndex]	 = ATOI(MID(sMsgToParse,7,1));			//Report managed mode status
+		}
+
+		ELSE														//Add previously sent command to beginnning of queue
+		{																 //if not executed properly.
+			sString = sStringToSend + sString;
+		}
+	}
+
+	nWaitingForAck = 0;												
+    IF(LEN(sString))
+	{																//Process message queue if anything is in it
+		WAIT(2)
+		SendCommand();
+	}
+}
+/*******************************************************************************************
+  Event Handlers
+*******************************************************************************************/
+PUSH Connect
+{
+	IF(LEN(Device_IP_Address) > 6 && LEN(Device_Port) && TCP_Connect_Status <> 2)
+	{
+		iStatus = SocketConnectClient (TCP_CLIENT_TCPSocket, Device_IP_Address, ATOI(Device_Port), 1);
+	
+		IF (iStatus < 0 && Debug)
+			TRACE("Hushbutton_PCI: Error connecting socket to address %s on port %s\n",Device_IP_Address, Device_Port);
+	}
+}
+
+RELEASE Connect
+{
+	IF(LEN(Device_IP_Address) > 6 && LEN(Device_Port))
+	{
+		iStatus = SocketDisconnectClient (TCP_CLIENT_TCPSocket);
+	
+		IF (iStatus < 0 && Debug)
+			TRACE("Hushbutton_PCI: Error disconnecting socket to address %s on port %d\n", Device_IP_Address, ATOI(Device_Port));
+	}
+}
+ 
+SOCKETCONNECT TCP_CLIENT_TCPSocket
+{
+	Connect_Status = 1;  
+
+	IF(Debug)
+		TRACE("Hushbutton_PCI: OnConnect: Connected to port %s on address %s\n",Device_Port, Device_IP_Address);
+}
+
+SOCKETDISCONNECT TCP_CLIENT_TCPSocket
+{
+	Connect_Status = 0;  
+	nWaitingForAck = 0;
+
+	IF(Debug)
+		TRACE("Hushbutton_PCI: On Disconnect: Disconnected to port %s on address %s\n",Device_Port, Device_IP_Address);
+}
+
+SOCKETSTATUS TCP_CLIENT_TCPSocket
+{
+	TCP_Connect_Status = SocketGetStatus();	
+}
+
+SOCKETRECEIVE TCP_CLIENT_TCPSocket
+{
+	TCPSocket_Rx$ =  TCP_CLIENT_TCPSocket.SocketRxBuf;
+
+	IF(Debug)
+		TRACE("Hushbutton_PCI: Rx'd: %s From:   %s",TCP_CLIENT_TCPSocket.SocketRxBuf, Device_IP_Address);
+
+	IF(LEFT(TCP_CLIENT_TCPSocket.SocketRxBuf, 4) != "\x00")					//Copy recieve buffer if not null
+		sMsg = sMsg +  TCP_CLIENT_TCPSocket.SocketRxBuf;
+
+	CLEARBUFFER(TCP_CLIENT_TCPSocket.SocketRxBuf);
+
+	IF(nBusy = 0)
+	{
+		nBusy = 1;
+
+		WHILE(FIND("}",sMsg))
+		{
+		    sMsgToParse = REMOVE("}",sMsg);
+		    ParseMessage();
+		}
+
+		nBusy = 0;
+	}
+}
+ 
+CHANGE TCPSocket_Tx$
+{     
+	IF(TCP_Connect_Status = 2)
+	{
+		iStatus = SocketSend(TCP_CLIENT_TCPSocket, TCPSocket_Tx$);
+        TRACE("Hushbutton_PCI: Error Sending to TCP_CLIENT_TCPSocket: %s\n", TCPSocket_Tx$);
+		IF (iStatus < 0 && Debug)
+			TRACE("Hushbutton_PCI: Error Sending to TCP_CLIENT_TCPSocket: %s\n", TCPSocket_Tx$);
+	}
+}
+
+//Red_LED_On turns Red LED On, Green LED Off and Opens PCM Relay 
+PUSH Red_LED_On		
+{
+	INTEGER nIndex; 
+
+	nIndex = GETLASTMODIFIEDARRAYINDEX();
+	
+	IF(nIndex < 9)
+	{
+		sString = sString + "{=" + ITOA(nIndex) +"1001}";
+	}
+	ELSE IF (nIndex = 9)
+	{
+		sString = sString + "{=aff0000ff}";
+    }
+	IF(nWaitingForAck = 0)
+		SendCommand();
+}
+
+//Green_LED_On turns Red LED Off, Green LED On and Closes PCM Relay 
+PUSH Green_LED_On
+{
+	INTEGER nIndex; 
+	
+	nIndex = GETLASTMODIFIEDARRAYINDEX();
+	
+	IF(nIndex < 9)
+	{
+		sString = sString + "{=" + ITOA(nIndex) +"0111}";
+    }
+	ELSE IF (nIndex = 9)
+	{
+		sString = sString + "{=a00ffffff}";
+	}
+
+	IF(nWaitingForAck = 0)
+		SendCommand();
+}
+
+//LED_Toggle toggles Red LED, Green LED and PCM Relay 
+PUSH LED_Toggle
+{
+	INTEGER nIndex; 
+	
+	nIndex = GETLASTMODIFIEDARRAYINDEX();
+	
+	IF(Red_LED_Is_On[nIndex])
+		sString = sString + "{=" + ITOA(nIndex) +"0111}";
+	ELSE
+		sString = sString + "{=" + ITOA(nIndex) +"1001}";
+	
+	IF(nWaitingForAck = 0)
+		SendCommand();
+}
+
+//LED_Off turns Red LED Off, Green LED Off and Opens PCM Relay 
+PUSH LED_Off
+{
+	INTEGER nIndex; 
+	
+	nIndex = GETLASTMODIFIEDARRAYINDEX();
+	
+	IF(nIndex < 9)
+		sString = sString + "{=" + ITOA(nIndex) +"0001}";
+	ELSE IF (nIndex = 9)
+		sString = sString + "{=a000000ff}";
+	
+	IF(nWaitingForAck = 0)
+		SendCommand();
+}
+
+//Managed Mode will be set to on 
+PUSH Managed_Mode_On
+{
+	INTEGER nIndex; 
+	
+	nIndex = GETLASTMODIFIEDARRAYINDEX();
+	
+	IF(nIndex < 9)
+		sString = sString + "{=" + ITOA(nIndex) +"xxx1}";
+	ELSE IF (nIndex = 9)
+		sString = sString + "{=axxxxxxff}";
+	
+	IF(nWaitingForAck = 0)
+		SendCommand();
+}
+
+PUSH Managed_Mode_Off
+{
+	INTEGER nIndex; 
+	
+	nIndex = GETLASTMODIFIEDARRAYINDEX();
+	
+	IF(nIndex < 9)
+		sString = sString + "{=" + ITOA(nIndex) +"xxx0}";
+	ELSE IF (nIndex = 9)
+		sString = sString + "{=axxxxxx00}";
+	
+	IF(nWaitingForAck = 0)
+		SendCommand();
+}
+
+PUSH Poll
+{
+	INTEGER nIndex; 
+	
+	nIndex = GETLASTMODIFIEDARRAYINDEX();
+	Trace("POLL nIndex: %d", nIndex);
+
+	
+	IF(nIndex < 9)
+	{
+		sString = sString + "{?" + ITOA(nIndex) + "}";
+	}
+	ELSE IF (nIndex = 9)
+	{
+		sString = sString + "{?a}";
+	}
+	
+	IF(nWaitingForAck = 0)
+		SendCommand();
+}
+ 
+/*******************************************************************************************
+  Main()
+*******************************************************************************************/
+Function Main()
+{
+    nWaitingForAck = 0;
+}
