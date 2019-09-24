@@ -8,6 +8,7 @@ System Name:    Hushbutton PCI
 System Number:
 Programmer:		Patrick Murray, Controlhaus Systems Design
 Comments:
+Revision: 		1.4
 */
 
 /*******************************************************************************************
@@ -52,6 +53,7 @@ _SKIP_,
 _SKIP_,
 Debug,
 Connect,
+Heartbeat,
 Red_LED_On[9],
 Green_LED_On[9],
 LED_Toggle[8],
@@ -72,6 +74,7 @@ _SKIP_,
 _SKIP_,
 _SKIP_,
 Connect_Status,
+Heartbeat_Timeout,
 _SKIP_,
 Red_LED_Is_On[8],
 _SKIP_,
@@ -131,6 +134,7 @@ Device_Port[4];
 INTEGER nBusy;
 INTEGER nWaitingForAck;
 SIGNED_INTEGER iStatus;
+INTEGER nHeartbeat_Acknowledged;
 
 // LONG_INTEGER
 // SIGNED_LONG_INTEGER
@@ -296,7 +300,9 @@ FUNCTION ParseMessage()
 
 		ELSE														//Add previously sent command to beginnning of queue
 		{																 //if not executed properly.
-			sString = sStringToSend + sString;
+			IF(Debug)
+				sString = sStringToSend + sString;
+				TRACE("Resending: %s",sString);			
 		}
 	}
 
@@ -335,6 +341,7 @@ RELEASE Connect
 SOCKETCONNECT TCP_CLIENT_TCPSocket
 {
 	Connect_Status = 1;  
+	nHeartbeat_Acknowledged = 1;
 
 	IF(Debug)
 		TRACE("Hushbutton_PCI: OnConnect: Connected to port %s on address %s\n",Device_Port, Device_IP_Address);
@@ -356,6 +363,7 @@ SOCKETSTATUS TCP_CLIENT_TCPSocket
 
 SOCKETRECEIVE TCP_CLIENT_TCPSocket
 {
+	nHeartbeat_Acknowledged = 1;
 	TCPSocket_Rx$ =  TCP_CLIENT_TCPSocket.SocketRxBuf;
 
 	IF(Debug)
@@ -385,7 +393,6 @@ CHANGE TCPSocket_Tx$
 	IF(TCP_Connect_Status = 2)
 	{
 		iStatus = SocketSend(TCP_CLIENT_TCPSocket, TCPSocket_Tx$);
-        TRACE("Hushbutton_PCI: Error Sending to TCP_CLIENT_TCPSocket: %s\n", TCPSocket_Tx$);
 		IF (iStatus < 0 && Debug)
 			TRACE("Hushbutton_PCI: Error Sending to TCP_CLIENT_TCPSocket: %s\n", TCPSocket_Tx$);
 	}
@@ -512,6 +519,24 @@ PUSH Poll
 	
 	IF(nWaitingForAck = 0)
 		SendCommand();
+}
+
+PUSH Heartbeat
+{
+	if(Connect_Status = 1)
+	{
+		if(nHeartbeat_Acknowledged = 1)
+		{
+			nHeartbeat_Acknowledged = 0;
+			iStatus = SocketSend(TCP_CLIENT_TCPSocket, "{?a}");
+			IF (iStatus < 0 && Debug)
+				TRACE("Hushbutton_PCI: Error Sending Heartbeat to TCP_CLIENT_TCPSocket: %s\n", TCPSocket_Tx$);
+		}
+		else
+		{
+	    	PULSE(10, Heartbeat_Timeout);
+		}
+	}
 }
  
 /*******************************************************************************************
