@@ -54,11 +54,12 @@ _SKIP_,
 Debug,
 Connect,
 Heartbeat,
+Poll_Presses,
 Red_LED_On[9],
 Green_LED_On[9],
 LED_Toggle[8],
 LED_Off[9],
-Poll[9],
+Poll_Leds[9],
 Managed_Mode_On[9],
 Managed_Mode_Off[9];
 
@@ -345,6 +346,15 @@ SOCKETCONNECT TCP_CLIENT_TCPSocket
 
 	IF(Debug)
 		TRACE("Hushbutton_PCI: OnConnect: Connected to port %s on address %s\n",Device_Port, Device_IP_Address);
+
+	sString = sString + "{?a}";
+	IF(nWaitingForAck = 0)
+		SendCommand();
+    
+	DELAY(20);
+	sString = sString + "{?s}";		
+	IF(nWaitingForAck = 0)
+		SendCommand();
 }
 
 SOCKETDISCONNECT TCP_CLIENT_TCPSocket
@@ -500,12 +510,12 @@ PUSH Managed_Mode_Off
 		SendCommand();
 }
 
-PUSH Poll
+PUSH Poll_Leds
 {
 	INTEGER nIndex; 
 	
 	nIndex = GETLASTMODIFIEDARRAYINDEX();
-	Trace("POLL nIndex: %d", nIndex);
+	Trace("Poll_Leds nIndex: %d", nIndex);
 
 	
 	IF(nIndex < 9)
@@ -517,6 +527,15 @@ PUSH Poll
 		sString = sString + "{?a}";
 	}
 	
+	IF(nWaitingForAck = 0)
+		SendCommand();
+}
+   
+
+PUSH Poll_Presses
+{
+	Trace("Poll_Presses");
+    sString = sString + "{?s}";		
 	IF(nWaitingForAck = 0)
 		SendCommand();
 }
