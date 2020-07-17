@@ -620,13 +620,13 @@ namespace UserModule_HUSHBUTTON_PCI
             if ( Functions.TestForTrue  ( ( Functions.Length( SSTRING ))  ) ) 
                 { 
                 __context__.SourceCodeLine = 313;
-                CreateWait ( "__SPLS_TMPVAR__WAITLABEL_2__" , 2 , __SPLS_TMPVAR__WAITLABEL_2___Callback ) ;
+                CreateWait ( "__SPLS_TMPVAR__WAITLABEL_1__" , 2 , __SPLS_TMPVAR__WAITLABEL_1___Callback ) ;
                 } 
             
             
             }
             
-        public void __SPLS_TMPVAR__WAITLABEL_2___CallbackFn( object stateInfo )
+        public void __SPLS_TMPVAR__WAITLABEL_1___CallbackFn( object stateInfo )
         {
         
             try
@@ -1427,7 +1427,7 @@ public override void LogosSplusInitialize()
     DEVICE_PORT = new StringParameter( DEVICE_PORT__Parameter__, this );
     m_ParameterList.Add( DEVICE_PORT__Parameter__, DEVICE_PORT );
     
-    __SPLS_TMPVAR__WAITLABEL_2___Callback = new WaitFunction( __SPLS_TMPVAR__WAITLABEL_2___CallbackFn );
+    __SPLS_TMPVAR__WAITLABEL_1___Callback = new WaitFunction( __SPLS_TMPVAR__WAITLABEL_1___CallbackFn );
     
     CONNECT.OnDigitalPush.Add( new InputChangeHandlerWrapper( CONNECT_OnPush_0, false ) );
     CONNECT.OnDigitalRelease.Add( new InputChangeHandlerWrapper( CONNECT_OnRelease_1, false ) );
@@ -1475,7 +1475,7 @@ public override void LogosSimplSharpInitialize()
 public UserModuleClass_HUSHBUTTON_PCI ( string InstanceName, string ReferenceID, Crestron.Logos.SplusObjects.CrestronStringEncoding nEncodingType ) : base( InstanceName, ReferenceID, nEncodingType ) {}
 
 
-private WaitFunction __SPLS_TMPVAR__WAITLABEL_2___Callback;
+private WaitFunction __SPLS_TMPVAR__WAITLABEL_1___Callback;
 
 
 const uint DEBUG__DigitalInput__ = 0;
