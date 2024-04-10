@@ -151,25 +151,31 @@ STRING sStringToSend[24];
 
 FUNCTION SendCommand()
 {     	
+	TRACE("Hushbutton_PCI: Send Command From Buffer: %s",sString);
+	TRACE("Hushbutton_PCI: nWaitingForAck: %d ",nWaitingForAck);
+	TRACE("Hushbutton_PCI: Connect_Status: %d ",Connect_Status);
+	
 	IF(Connect_Status && LEN(sString) && nWaitingForAck = 0)
 	{                              
 		nWaitingForAck = 1;			
 
 		sStringToSend = REMOVE("}",sString,1);
 		IF(LEN(sStringToSend))
-			iStatus = SocketSend(TCP_CLIENT_TCPSocket, sStringToSend); 
-		TRACE("Hushbutton_PCI: Sent: %s To:   %s",sStringToSend, Device_IP_Address);
-	    IF(iStatus >= 0)
+			iStatus = SocketSend(TCP_CLIENT_TCPSocket, sStringToSend); 		
+	    	IF(iStatus >= 0)
 		{	
 			IF(Debug)
-				TRACE("Hushbutton_PCI: Sent: %s To:   %s",sStringToSend, Device_IP_Address);
+				TRACE("Hushbutton_PCI: Sent: %s To: %s",sStringToSend, Device_IP_Address);
 		}
 			
 		ELSE
+		{
 			nWaitingForAck = 0;
-
-		IF (iStatus < 0 && Debug)
-			TRACE("Hushbutton_PCI: Error Sending: %s To: %s",sStringToSend, Device_IP_Address);
+			IF(Debug){
+				TRACE("Hushbutton_PCI: Error Sending: %s To: %s" ,sStringToSend, Device_IP_Address);
+				TRACE(iStatus);
+			}
+		}
 	}
 }
 
@@ -374,10 +380,14 @@ SOCKETSTATUS TCP_CLIENT_TCPSocket
 SOCKETRECEIVE TCP_CLIENT_TCPSocket
 {
 	nHeartbeat_Acknowledged = 1;
+	nWaitingForAck = 0;
+	SendCommand();
+	TRACE("Hushbutton_PCI: Rx'd: %s From:   %s",TCP_CLIENT_TCPSocket.SocketRxBuf , Device_IP_Address);
+
 	TCPSocket_Rx$ =  TCP_CLIENT_TCPSocket.SocketRxBuf;
 
 	IF(Debug)
-		TRACE("Hushbutton_PCI: Rx'd: %s From:   %s",TCP_CLIENT_TCPSocket.SocketRxBuf, Device_IP_Address);
+		TRACE("Hushbutton_PCI: Rx'd: %s From:   %s",TCPSocket_Rx$ , Device_IP_Address);
 
 	IF(LEFT(TCP_CLIENT_TCPSocket.SocketRxBuf, 4) != "\x00")					//Copy recieve buffer if not null
 		sMsg = sMsg +  TCP_CLIENT_TCPSocket.SocketRxBuf;
@@ -396,9 +406,6 @@ SOCKETRECEIVE TCP_CLIENT_TCPSocket
 
 		nBusy = 0;
 	}
-	
-	nWaitingForAck = 0;
-	SendCommand();
 }
  
 CHANGE TCPSocket_Tx$
@@ -556,7 +563,7 @@ PUSH Heartbeat
 		}
 		else
 		{
-	    	PULSE(10, Heartbeat_Timeout);
+	    		PULSE(10, Heartbeat_Timeout);
 		}
 	}
 }
