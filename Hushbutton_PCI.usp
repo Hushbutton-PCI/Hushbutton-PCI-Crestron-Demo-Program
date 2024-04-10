@@ -173,7 +173,7 @@ FUNCTION SendCommand()
 			nWaitingForAck = 0;
 			IF(Debug){
 				TRACE("Hushbutton_PCI: Error Sending: %s To: %s" ,sStringToSend, Device_IP_Address);
-				TRACE(iStatus);
+				TRACE("Hushbutton_PCI: %d", iStatus);
 			}
 		}
 	}
@@ -382,12 +382,12 @@ SOCKETRECEIVE TCP_CLIENT_TCPSocket
 	nHeartbeat_Acknowledged = 1;
 	nWaitingForAck = 0;
 	SendCommand();
-	TRACE("Hushbutton_PCI: Rx'd: %s From:   %s",TCP_CLIENT_TCPSocket.SocketRxBuf , Device_IP_Address);
+	TRACE("Hushbutton_PCI: Rx'd: %s From: %s", TCP_CLIENT_TCPSocket.SocketRxBuf, Device_IP_Address);
 
 	TCPSocket_Rx$ =  TCP_CLIENT_TCPSocket.SocketRxBuf;
 
 	IF(Debug)
-		TRACE("Hushbutton_PCI: Rx'd: %s From:   %s",TCPSocket_Rx$ , Device_IP_Address);
+		TRACE("Hushbutton_PCI: Rx'd: %s From: %s", TCP_CLIENT_TCPSocket.SocketRxBuf, Device_IP_Address);
 
 	IF(LEFT(TCP_CLIENT_TCPSocket.SocketRxBuf, 4) != "\x00")					//Copy recieve buffer if not null
 		sMsg = sMsg +  TCP_CLIENT_TCPSocket.SocketRxBuf;
