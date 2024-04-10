@@ -396,6 +396,9 @@ SOCKETRECEIVE TCP_CLIENT_TCPSocket
 
 		nBusy = 0;
 	}
+	
+	nWaitingForAck = 0;
+	SendCommand();
 }
  
 CHANGE TCPSocket_Tx$
