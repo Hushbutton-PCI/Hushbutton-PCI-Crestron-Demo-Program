@@ -140,7 +140,7 @@ INTEGER nHeartbeat_Acknowledged;
 // LONG_INTEGER
 // SIGNED_LONG_INTEGER
 
-STRING sMsg[64];
+STRING sMsg[512];
 STRING sMsgToParse[12];
 STRING sString[1024];
 STRING sStringToSend[24];
@@ -293,20 +293,19 @@ FUNCTION ParseMessage()
 		}
 	}
 
-	ELSE															//Parse message containing info for single mics
+	ELSE												//Parse message containing info for single mics
 	{
-		IF((FIND("?",sStringToSend)) || (sStringToSend = sMsgToParse))	//Parse feedback if poll command was sent or if command was executed properly.
+		IF((FIND("?",sStringToSend)) || (sStringToSend = sMsgToParse))				//Parse feedback if poll command was sent or if command was executed properly.
 		{
-	    	nIndex = ATOI(MID(sMsgToParse,3,1));								//Determine which mic the message is for
-			
+	    		nIndex = ATOI(MID(sMsgToParse,3,1));						//Determine which mic the message is for			
 			Red_LED_Is_On[nIndex] 		 = ATOI(MID(sMsgToParse,4,1));			//Report mute status
 			Green_LED_Is_On[nIndex] 	 = ATOI(MID(sMsgToParse,5,1));			//Report mute status
 			PCM_Relay_Is_Closed[nIndex]  = ATOI(MID(sMsgToParse,6,1));			//Report Relay status
 			//Managed_Mode_Is_On[nIndex]	 = ATOI(MID(sMsgToParse,7,1));			//Report managed mode status
 		}
 
-		ELSE														//Add previously sent command to beginnning of queue
-		{																 //if not executed properly.
+		ELSE											//Add previously sent command to beginnning of queue
+		{												//if not executed properly.
 			IF(Debug)
 				sString = sStringToSend + sString;
 				TRACE("Resending: %s",sString);			
@@ -314,8 +313,8 @@ FUNCTION ParseMessage()
 	}
 
 	nWaitingForAck = 0;												
-    IF(LEN(sString))
-	{																//Process message queue if anything is in it
+    	IF(LEN(sString))
+	{												//Process message queue if anything is in it
 		WAIT(2)
 		SendCommand();
 	}
@@ -353,20 +352,15 @@ SOCKETCONNECT TCP_CLIENT_TCPSocket
 	IF(Debug)
 		TRACE("Hushbutton_PCI: OnConnect: Connected to port %s on address %s\n",Device_Port, Device_IP_Address);
 
-	sString = sString + "{?a}";
-	IF(nWaitingForAck = 0)
-		SendCommand();
-    
-	DELAY(20);
-	sString = sString + "{?s}";		
-	IF(nWaitingForAck = 0)
-		SendCommand();
+	sString = "{?a}{?s}";	
+	SendCommand();	
 }
 
 SOCKETDISCONNECT TCP_CLIENT_TCPSocket
 {
 	Connect_Status = 0;  
 	nWaitingForAck = 0;
+	sString = "";
 
 	IF(Debug)
 		TRACE("Hushbutton_PCI: On Disconnect: Disconnected to port %s on address %s\n",Device_Port, Device_IP_Address);
@@ -389,8 +383,14 @@ SOCKETRECEIVE TCP_CLIENT_TCPSocket
 	IF(Debug)
 		TRACE("Hushbutton_PCI: Rx'd: %s From: %s", TCP_CLIENT_TCPSocket.SocketRxBuf, Device_IP_Address);
 
-	IF(LEFT(TCP_CLIENT_TCPSocket.SocketRxBuf, 4) != "\x00")					//Copy recieve buffer if not null
-		sMsg = sMsg +  TCP_CLIENT_TCPSocket.SocketRxBuf;
+	IF(LEFT(TCP_CLIENT_TCPSocket.SocketRxBuf, 4) != "\x00")					// Copy recieve buffer if not null		
+	{
+		if(LEN(sMsg) + LEN(TCP_CLIENT_TCPSocket.SocketRxBuf) < 512){			// Append messages from the socket to the receive buffer.
+			sMsg = sMsg +  TCP_CLIENT_TCPSocket.SocketRxBuf;
+		} else {
+			sMsg = TCP_CLIENT_TCPSocket.SocketRxBuf;				// Overwrite the buffer with the socket message if the buffer gets too big.
+		}
+	} 
 
 	CLEARBUFFER(TCP_CLIENT_TCPSocket.SocketRxBuf);
 
@@ -410,12 +410,8 @@ SOCKETRECEIVE TCP_CLIENT_TCPSocket
  
 CHANGE TCPSocket_Tx$
 {     
-	IF(TCP_Connect_Status = 2)
-	{
-		iStatus = SocketSend(TCP_CLIENT_TCPSocket, TCPSocket_Tx$);
-		IF (iStatus < 0 && Debug)
-			TRACE("Hushbutton_PCI: Error Sending to TCP_CLIENT_TCPSocket: %s\n", TCPSocket_Tx$);
-	}
+	sString = sString + TCPSocket_Tx$;
+	SendCommand();	
 }
 
 //Red_LED_On turns Red LED On, Green LED Off and Opens PCM Relay 
