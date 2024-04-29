@@ -310,7 +310,6 @@ FUNCTION ParseMessage()
 	nWaitingForAck = 0;												
     IF(LEN(sString))
 	{																//Process message queue if anything is in it
-		WAIT(2)
 		SendCommand();
 	}
 }
